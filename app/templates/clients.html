@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block body %}
+  <h1>Clients</h1>
+  <table>
+    <tr><th>Household</th><th>Tax year</th><th>People</th></tr>
+    {% for c in clients %}
+    <tr>
+      <td><a href="{{ url_for('main.client_page', cid=c.id) }}">{{ c.name }}</a></td>
+      <td>{{ c.tax_year }}</td>
+      <td>{{ c.people | length }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" class="muted">No clients yet — run <code>python scripts/seed.py</code>.</td></tr>
+    {% endfor %}
+  </table>
+{% endblock %}

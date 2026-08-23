@@ -13,12 +13,11 @@ def create_app(config: type[Config] = Config) -> Flask:
 
     init_engine(app.config["DATABASE_URL"], create_all=True)
 
+    from .routes import bp
+    app.register_blueprint(bp)
+
     @app.get("/health")
     def health():
         return {"status": "ok"}
-
-    @app.get("/")
-    def index():
-        return "Document Collection — scaffold OK (UI arrives at M6)"
 
     return app

@@ -59,8 +59,12 @@ def main() -> None:
             print(f"Rivera household already seeded (client id={existing.id}).")
             return
         client = seed_rivera(session)
+        # Run the initial (January) derivation so the app opens on a populated checklist.
+        from app.domain.reconciliation import run_derivation
+        run = run_derivation(session, client, "initial derivation (January)")
         print(f"Seeded '{client.name}' (id={client.id}, TY{client.tax_year}) with "
-              f"{len(client.people)} people in January state.")
+              f"{len(client.people)} people; initial derivation added "
+              f"{run.summary_json['added']} requirements.")
 
 
 if __name__ == "__main__":
