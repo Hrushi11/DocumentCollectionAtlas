@@ -27,8 +27,35 @@ flask --app app run                   # → http://127.0.0.1:5000/client/1
 Run the tests (no browser needed for the logic):
 
 ```bash
-pytest -q                             # 34 tests
+pytest -q                             # 39 tests
 ```
+
+---
+
+## Screen-by-screen walkthrough
+
+*(Screenshots are captured from the running app by `scripts/screenshots.py`.)*
+
+**1. Clients** — the landing page. Open a client or **+ New client**.
+
+![Clients](docs/screenshots/01-clients.png)
+
+**2. New client** — enter the household, its people, and how many jobs each had this year.
+The document checklist is built automatically from this.
+
+![New client](docs/screenshots/02-new-client.png)
+
+**3. The client checklist** — everything this client owes, grouped by person, with plain
+statuses (Received / Still needed / Not needed).
+
+![Checklist](docs/screenshots/03-checklist-initial.png)
+
+**4. After uploading** — clean files file themselves; the awkward ones (wrong year, unknown
+person, unreadable) land in **Needs your review** with a plain-English reason and safe, guided
+actions. Note the **"No matching row"** guard (a file can't be mis-filed onto the wrong row)
+and the **"Need something the list doesn't show?"** panel for adding a document manually.
+
+![After upload](docs/screenshots/04-after-upload.png)
 
 ---
 
