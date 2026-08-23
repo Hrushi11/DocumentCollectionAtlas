@@ -1,16 +1,31 @@
 {% extends "base.html" %}
+{% block title %}Your clients{% endblock %}
 {% block body %}
-  <h1>Clients</h1>
-  <table>
-    <tr><th>Household</th><th>Tax year</th><th>People</th></tr>
+  <div style="display:flex; justify-content:space-between; align-items:flex-end">
+    <div>
+      <h1>Your clients</h1>
+      <div class="muted">Pick a client to see which tax documents are in and which are still needed.</div>
+    </div>
+    <a class="btn primary" href="{{ url_for('main.new_client_form') }}">+ New client</a>
+  </div>
+
+  {% if clients %}
+  <table style="margin-top:16px">
+    <tr><th>Client</th><th>Tax year</th><th>People</th><th></th></tr>
     {% for c in clients %}
     <tr>
-      <td><a href="{{ url_for('main.client_page', cid=c.id) }}">{{ c.name }}</a></td>
+      <td><a href="{{ url_for('main.client_page', cid=c.id) }}"><strong>{{ c.name }}</strong></a></td>
       <td>{{ c.tax_year }}</td>
-      <td>{{ c.people | length }}</td>
+      <td>{{ c.people | map(attribute='name') | join(', ') }}</td>
+      <td><a href="{{ url_for('main.client_page', cid=c.id) }}">Open →</a></td>
     </tr>
-    {% else %}
-    <tr><td colspan="3" class="muted">No clients yet — run <code>python scripts/seed.py</code>.</td></tr>
     {% endfor %}
   </table>
+  {% else %}
+  <div class="panel empty">
+    <p><strong>No clients yet.</strong></p>
+    <p>Add your first client to start collecting their tax documents.</p>
+    <a class="btn primary" href="{{ url_for('main.new_client_form') }}">+ New client</a>
+  </div>
+  {% endif %}
 {% endblock %}

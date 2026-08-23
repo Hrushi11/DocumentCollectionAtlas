@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}New client{% endblock %}
+{% block body %}
+  <p><a href="{{ url_for('main.index') }}">← Back to clients</a></p>
+  <h1>New client</h1>
+  <div class="muted">Tell us who's in the household and their jobs — we'll build the document
+    checklist automatically.</div>
+
+  <form method="post" action="{{ url_for('main.create_client') }}">
+    <div class="panel" style="margin-top:16px">
+      <label class="f">Client / household name</label>
+      <input type="text" name="name" placeholder="e.g. Rivera household" required style="min-width:280px">
+
+      <div style="display:flex; gap:24px; flex-wrap:wrap">
+        <div>
+          <label class="f">Tax year (the year being filed)</label>
+          <input type="number" name="tax_year" value="2025" style="width:120px">
+        </div>
+        <div>
+          <label class="f">Filing status</label>
+          <select name="filing_status">
+            {% for fs in filing_statuses %}
+            <option value="{{ fs.name }}" {% if fs.value=='married_joint' %}selected{% endif %}>
+              {{ FILING_LABEL[fs.value] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <strong>People in this household</strong>
+      <div class="muted" style="margin:4px 0 12px">
+        Add each person. “Number of jobs this year” = how many employers they worked for —
+        we'll expect one W-2 per job.</div>
+
+      <div class="row-people muted" style="text-transform:uppercase; font-size:11px">
+        <div>Name</div><div>Role</div><div>Jobs this year</div>
+      </div>
+      {% for i in range(6) %}
+      <div class="row-people">
+        <input type="text" name="person_name_{{ i }}" placeholder="{{ 'Full name' if i>0 else 'e.g. Ana Rivera' }}">
+        <select name="person_role_{{ i }}">
+          {% for r in roles %}
+          <option value="{{ r.name }}" {% if r.value=='taxpayer' and i==0 %}selected{% elif r.value=='dependent' and i>0 %}selected{% endif %}>
+            {{ ROLE_LABEL[r.value] }}</option>
+          {% endfor %}
+        </select>
+        <input type="number" name="person_jobs_{{ i }}" value="0" min="0" max="10" style="width:90px">
+      </div>
+      {% endfor %}
+      <div class="muted">Leave a row blank to skip it.</div>
+    </div>
+
+    <button class="primary" type="submit">Create client</button>
+    <a class="btn" href="{{ url_for('main.index') }}">Cancel</a>
+  </form>
+{% endblock %}

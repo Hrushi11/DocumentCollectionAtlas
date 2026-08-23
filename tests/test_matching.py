@@ -1,10 +1,13 @@
 """M4: classification + matching + review actions (docs/05 C1–C9, D1–D4)."""
 from pathlib import Path
 
+import pytest
+
 from app.domain.classifier import Classification, StubClassifier, TieredExtractor
 from app.domain.matching import (
     accept,
     add_requirement,
+    can_accept,
     find_open_slot,
     ingest,
     reassign,
@@ -147,6 +150,25 @@ def test_d2_reassign_corrects_person(session):
     luis = person(client, Role.SPOUSE)
     assert doc.state is DocState.MATCHED
     assert any(link.active and link.requirement.person_id == luis.id for link in doc.links)
+
+
+def test_accept_rejects_incompatible_row(session):
+    """Server-side guard (suggestion.md #1): accepting onto a mismatched row is refused."""
+    client = prepared(session)
+    doc = ingest_fix(session, client, "w2_carlos_2025.pdf")        # unknown person
+    ana = person(client, Role.TAXPAYER)
+    ana_slot0 = find_open_slot(session, client, DocType.W2, ana.id, 2025)
+    assert not can_accept(doc, ana_slot0, client)
+    with pytest.raises(ValueError):
+        accept(session, client, doc, ana_slot0)
+
+
+def test_add_requirement_autoslots_without_collision(session):
+    """UI-added requirements pick a free slot so they never clash with the unique key."""
+    client = prepared(session)
+    ana = person(client, Role.TAXPAYER)                            # already has W-2 slots 0,1
+    req = add_requirement(session, client, DocType.W2, person_id=ana.id, tax_year=2025)
+    assert req.slot_index == 2 and req.origin.value == "human"
 
 
 def test_d3_reject_junk(session):

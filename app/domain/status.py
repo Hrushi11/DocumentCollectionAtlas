@@ -49,10 +49,18 @@ def attention_documents(session, client) -> list[Document]:
             .order_by(Document.uploaded_at).all())
 
 
+def pinned_outstanding(session, client) -> list[Requirement]:
+    """Items the accountant explicitly marked 'required' that are still not in — high signal."""
+    return [r for r in visible_requirements(session, client)
+            if r.human_override is HumanOverride.PINNED and status_of(r) == OUTSTANDING]
+
+
 def client_summary(session, client) -> dict:
     counts = {RECEIVED: 0, OUTSTANDING: 0, NOT_NEEDED: 0}
     for req in visible_requirements(session, client):
         counts[status_of(req)] += 1
-    counts["attention"] = len(attention_documents(session, client))
+    counts["review"] = len(attention_documents(session, client))
+    counts["pinned"] = len(pinned_outstanding(session, client))
+    counts["attention"] = counts["review"] + counts["pinned"]      # files to review + pinned items
     counts["total_visible"] = counts[RECEIVED] + counts[OUTSTANDING] + counts[NOT_NEEDED]
     return counts

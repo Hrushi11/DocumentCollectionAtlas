@@ -11,6 +11,7 @@ built until these read cleanly. Read them in order.
 | 04 | [Core Algorithms](04-core-algorithms.md) | Derivation, three-way reconciliation, matching, status — the logic that matters |
 | 05 | [Test Scenarios (E2E)](05-test-scenarios.md) | End-to-end scenarios and the test cases that prove each one |
 | 06 | [Tech Spec & Execution Plan](06-tech-spec-and-plan.md) | Architecture, routes, UI, project layout, milestone-by-milestone build order |
+| 07 | [Frontend / UX Spec](07-frontend-ux-spec.md) | Non-technical-user UI: plain-language glossary, screen-by-screen spec, guided walkthrough |
 
 ## Locked decisions (from planning)
 

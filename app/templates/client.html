@@ -1,62 +1,85 @@
 {% extends "base.html" %}
-{% block title %}{{ client.name }} — Document Collection{% endblock %}
+{% block title %}{{ client.name }}{% endblock %}
 {% block body %}
+  <p><a href="{{ url_for('main.index') }}">← Back to clients</a></p>
   <h1>{{ client.name }}</h1>
-  <div class="muted">Tax year {{ client.tax_year }} · {{ client.filing_status.value.replace('_',' ') }}
+  <div class="muted">Tax year {{ client.tax_year }} · {{ FILING_LABEL[client.filing_status.value] }}
     · {{ client.people | map(attribute='name') | join(', ') }}</div>
 
-  <div class="cards">
-    <div class="card"><div class="n">{{ summary.received }}</div><div class="l">Received</div></div>
-    <div class="card"><div class="n">{{ summary.outstanding }}</div><div class="l">Outstanding</div></div>
-    <div class="card"><div class="n">{{ summary.not_needed }}</div><div class="l">Not needed</div></div>
-    <div class="card attn"><div class="n">{{ summary.attention }}</div><div class="l">Needs attention</div></div>
+  <details class="help" open>
+    <summary>How this works</summary>
+    <ol>
+      <li><strong>Upload</strong> each document as it arrives from the client.</li>
+      <li>We <strong>read it and file it</strong> against the checklist, and <strong>flag</strong> anything odd.</li>
+      <li><strong>Review</strong> the flagged files, and you're done.</li>
+    </ol>
+  </details>
+
+  <div class="tiles">
+    <div class="tile"><div class="n">{{ summary.received }}</div><div class="l">Received</div></div>
+    <div class="tile"><div class="n">{{ summary.outstanding }}</div><div class="l">Still needed</div></div>
+    <div class="tile attn"><div class="n">{{ summary.attention }}</div><div class="l">Needs attention</div></div>
+    <div class="tile"><div class="n">{{ summary.not_needed }}</div><div class="l">Not needed</div></div>
   </div>
 
-  <!-- Add a document -->
+  {% if summary.attention %}
+    <div class="next warn">⚠️ {{ summary.attention }} item(s) need your attention{% if summary.review %} — {{ summary.review }} file(s) to review below{% endif %}{% if summary.pinned %}, {{ summary.pinned }} marked required{% endif %}.</div>
+  {% elif summary.outstanding %}
+    <div class="next info">Still waiting on {{ summary.outstanding }} document(s). Upload them below as they arrive.</div>
+  {% else %}
+    <div class="next done">✅ All documents are in. Nothing outstanding.</div>
+  {% endif %}
+
+  <!-- Add documents -->
   <div class="panel">
     <form method="post" action="{{ url_for('main.upload', cid=client.id) }}" enctype="multipart/form-data">
-      <strong>Add a document</strong>
-      <input type="file" name="file" required>
+      <strong>Add documents</strong>
+      <div class="muted" style="margin:4px 0 10px">Choose one or more files (W-2s, last year's
+        return, a government ID). We'll sort them for you.</div>
+      <input type="file" name="file" multiple required>
       <button class="primary" type="submit">Upload</button>
-      <span class="muted">The tool reads it and files it, or sends it to review.</span>
     </form>
   </div>
 
-  <!-- Needs attention -->
+  <!-- Needs your review -->
   {% if attention %}
-  <h2>Needs your attention</h2>
+  <h2>Needs your review</h2>
   {% for d in attention %}
-  <div class="panel attn-item">
-    <div>
-      <strong>{{ d.original_filename }}</strong>
-      <span class="badge b-{{ d.state.value }}">{{ d.state.value.replace('_',' ') }}{% if d.exception_reason %}: {{ d.exception_reason.value.replace('_',' ') }}{% endif %}</span>
-    </div>
-    <div class="muted">
-      guess: {{ d.guess_type.value if d.guess_type else '—' }} ·
-      {{ d.guess_person_name or 'unknown person' }} ·
-      year {{ d.guess_year or '—' }} ·
-      confidence {{ '%.0f'|format(d.confidence*100) }}% ·
-      via {{ d.extraction_source.value if d.extraction_source else '—' }}
-    </div>
-    <div style="margin-top:8px">
-      <form class="inline" method="post" action="{{ url_for('main.review', did=d.id) }}">
+  <div class="panel review">
+    <div><strong>{{ d.original_filename }}</strong></div>
+    <div class="why">{{ why_text(d, client) }}</div>
+    <div class="actions">
+      {% if accept_options[d.id] %}
+      <form class="inline actions" method="post" action="{{ url_for('main.review', did=d.id) }}">
         <input type="hidden" name="action" value="accept">
+        <span class="muted">This belongs to:</span>
         <select name="requirement_id">
-          {% for r in outstanding %}
-          <option value="{{ r.id }}">{{ r.person.name if r.person else client.name }} — {{ r.doc_type.value }}{% if r.doc_type.value=='W2' %} #{{ r.slot_index }}{% endif %}{% if r.tax_year %} ({{ r.tax_year }}){% endif %}</option>
+          {% for r in accept_options[d.id] %}
+          <option value="{{ r.id }}">{{ (r.person.name ~ ' — ') if r.person else 'Household — ' }}{{ doc_name(r.doc_type.value, r.slot_index) }}{% if r.tax_year %} ({{ r.tax_year }}){% endif %}</option>
           {% endfor %}
         </select>
-        <button type="submit">Accept onto slot</button>
+        <button type="submit">File it here</button>
       </form>
-      <form class="inline" method="post" action="{{ url_for('main.review', did=d.id) }}">
+      {% else %}
+      <span class="muted">No matching row — fix the person/year below, or mark it not this client.</span>
+      {% endif %}
+      <form class="inline actions" method="post" action="{{ url_for('main.review', did=d.id) }}">
         <input type="hidden" name="action" value="reassign">
-        <input type="text" name="person_name" placeholder="person" size="10">
-        <input type="number" name="tax_year" placeholder="year" style="width:80px">
-        <button type="submit">Reassign</button>
+        <span class="muted">Change:</span>
+        <select name="person_name">
+          <option value="">(keep person)</option>
+          {% for p in people %}<option value="{{ p.name }}">{{ p.name }}</option>{% endfor %}
+        </select>
+        <select name="tax_year">
+          <option value="">(keep year)</option>
+          <option value="{{ client.tax_year }}">{{ client.tax_year }}</option>
+          <option value="{{ client.tax_year - 1 }}">{{ client.tax_year - 1 }}</option>
+        </select>
+        <button type="submit">Update</button>
       </form>
       <form class="inline" method="post" action="{{ url_for('main.review', did=d.id) }}">
         <input type="hidden" name="action" value="reject">
-        <button type="submit">Reject</button>
+        <button class="danger" type="submit">Not this client</button>
       </form>
     </div>
   </div>
@@ -71,39 +94,58 @@
     {% set r = row.req %}
     <tr>
       <td>{{ r.person.name if r.person else client.name }}</td>
-      <td>{{ r.doc_type.value }}{% if r.doc_type.value=='W2' %} #{{ r.slot_index }}{% endif %}
-          {% if r.origin.value=='human' %}<span class="muted">(added)</span>{% endif %}
+      <td>{{ doc_name(r.doc_type.value, r.slot_index) }}
+          {% if r.origin.value=='human' %}<span class="muted">· added by you</span>{% endif %}
           {% if r.note %}<div class="muted">{{ r.note }}</div>{% endif %}</td>
       <td>{{ r.tax_year or '—' }}</td>
-      <td><span class="badge b-{{ row.status }}">{{ row.status.replace('_',' ') }}</span></td>
+      <td><span class="badge b-{{ row.status }}">{{ STATUS_LABEL[row.status] }}</span>
+          {% if r.human_override.value == 'pinned' %}<div class="muted" style="color:#b45309">★ required</div>{% endif %}</td>
       <td>
-        {% if row.filename %}{{ row.filename }}
+        {% if row.filename %}
+          <span class="filed">✓ {{ row.filename }}</span>
+        {% elif row.status == 'not_needed' %}
+          <form class="inline" method="post" action="{{ url_for('main.override', rid=r.id, action='unset') }}"><button class="link" type="submit">Undo</button></form>
         {% else %}
-          {% if row.status != 'not_needed' %}
-          <form class="inline" method="post" action="{{ url_for('main.override', rid=r.id, action='waive') }}"><button class="link" type="submit">not needed</button></form>
-          <form class="inline" method="post" action="{{ url_for('main.override', rid=r.id, action='pin') }}"><button class="link" type="submit">pin</button></form>
-          {% else %}
-          <form class="inline" method="post" action="{{ url_for('main.override', rid=r.id, action='unset') }}"><button class="link" type="submit">restore</button></form>
-          {% endif %}
+          <form class="inline" method="post" action="{{ url_for('main.override', rid=r.id, action='waive') }}"><button class="link" type="submit">Mark not needed</button></form>
+          <form class="inline" method="post" action="{{ url_for('main.override', rid=r.id, action='pin') }}"><button class="link" type="submit">Mark required</button></form>
         {% endif %}
       </td>
     </tr>
     {% endfor %}
   </table>
 
-  <!-- Re-derive (the "disclosed late" moment) -->
-  <h2>Re-derive</h2>
+  <!-- Add a document we need -->
+  <h2>Need something the list doesn't show?</h2>
+  <div class="panel">
+    <form class="actions" method="post" action="{{ url_for('main.add_req', cid=client.id) }}">
+      <div class="muted" style="width:100%; margin-bottom:6px">Add a document you know you'll
+        need but the system didn't list (e.g. a state return).</div>
+      <select name="person_id">
+        <option value="">Whole household</option>
+        {% for p in people %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+      </select>
+      <select name="doc_type">
+        {% for dt in doc_types %}<option value="{{ dt.name }}">{{ doc_name(dt.value) }}</option>{% endfor %}
+      </select>
+      <input type="number" name="tax_year" placeholder="year (optional)" style="width:150px">
+      <input type="text" name="note" placeholder="note (optional)" size="18">
+      <button type="submit">Add to checklist</button>
+    </form>
+  </div>
+
+  <!-- Something changed -->
+  <h2>Something changed?</h2>
   <div class="panel">
     <form method="post" action="{{ url_for('main.rederive', cid=client.id) }}">
-      <span class="muted">Something surfaced late? Add a mid-year job change and re-derive —
-        your waived / added / pinned items are preserved.</span>
-      <div style="margin-top:8px">
+      <div class="muted" style="margin-bottom:10px">Did the client mention a mid-year job change?
+        Record it and we'll update the checklist. <strong>Your not-needed and added items are kept.</strong></div>
+      <div class="actions">
         <select name="late_person_id">
-          <option value="">(no new job — just re-derive)</option>
+          <option value="">(just re-check the list)</option>
           {% for p in people %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
         </select>
-        <input type="text" name="late_employer" placeholder="new employer" size="16">
-        <button class="primary" type="submit">Re-derive</button>
+        <input type="text" name="late_employer" placeholder="new employer's name" size="18">
+        <button class="primary" type="submit">Update checklist</button>
       </div>
     </form>
   </div>

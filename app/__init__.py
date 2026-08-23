@@ -16,6 +16,9 @@ def create_app(config: type[Config] = Config) -> Flask:
     from .routes import bp
     app.register_blueprint(bp)
 
+    from . import labels
+    labels.register(app)
+
     @app.get("/health")
     def health():
         return {"status": "ok"}

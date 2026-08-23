@@ -42,6 +42,20 @@ def expected_year(doc_type: DocType | None, client) -> int | None:
     return None                      # ID (and unknown) are not year-scoped
 
 
+def can_accept(doc: "Document", req: Requirement, client) -> bool:
+    """Is `req` a valid target row for `doc`? Prevents a misclick from filing a W-2 into the
+    wrong person/type/year (suggestion.md #1). To change the person/year, use reassign()."""
+    if req.client_id != doc.client_id:
+        return False
+    if doc.guess_type is None or req.doc_type is not doc.guess_type:
+        return False
+    if req.doc_type in (DocType.W2, DocType.F1040) and req.tax_year != doc.guess_year:
+        return False
+    if req.doc_type is DocType.F1040:
+        return req.person_id is None                     # the 1040 is household-level
+    return req.person_id == doc.guess_person_id
+
+
 def resolve_person(client, name: str | None):
     if not name:
         return None
@@ -140,6 +154,8 @@ def ingest(session, client, file_path: str, original_filename: str, classifier) 
 
 # --- review-queue actions (the human resolving the attention queue) ---
 def accept(session, client, doc: Document, req: Requirement) -> Document:
+    if not can_accept(doc, req, client):
+        raise ValueError("This document doesn't match that checklist row.")
     for link in doc.links:
         link.active = False
     _match(session, client, doc, req, Origin.HUMAN, Actor.ACCOUNTANT)
@@ -178,9 +194,13 @@ def reassign(session, client, doc: Document, person_name: str | None = None,
 
 
 def add_requirement(session, client, doc_type: DocType, person_id=None, tax_year=None,
-                    slot_index=0, note: str | None = None) -> Requirement:
+                    slot_index: int | None = None, note: str | None = None) -> Requirement:
     """Accountant adds a requirement the system never anticipated (origin=HUMAN)."""
     from app.models import make_natural_key
+    if slot_index is None:                               # pick the next free slot to avoid clashes
+        siblings = session.query(Requirement).filter_by(
+            client_id=client.id, person_id=person_id, doc_type=doc_type, tax_year=tax_year).all()
+        slot_index = max((r.slot_index for r in siblings), default=-1) + 1
     key = make_natural_key(person_id, doc_type, tax_year, slot_index)
     req = Requirement(client_id=client.id, person_id=person_id, doc_type=doc_type,
                       tax_year=tax_year, slot_index=slot_index, natural_key=key,

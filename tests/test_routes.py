@@ -40,6 +40,22 @@ def test_f1_client_page_renders_sections_and_counts(app):
     body = resp.get_data(as_text=True)
     assert "Rivera household" in body
     assert "Checklist" in body and "Received" in body and "Needs attention" in body
+    assert "How this works" in body                 # guided walkthrough
+    assert "W-2 — job 1" in body                     # plain-language labels, not raw enums
+
+
+def test_f4_new_client_builds_checklist(app):
+    c = app.test_client()
+    resp = c.post("/clients", data={
+        "name": "Test Household", "tax_year": "2025", "filing_status": "MARRIED_JOINT",
+        "person_name_0": "Pat Test", "person_role_0": "TAXPAYER", "person_jobs_0": "2",
+        "person_name_1": "Sam Test", "person_role_1": "SPOUSE", "person_jobs_1": "1",
+    })
+    assert resp.status_code == 302
+    with SessionLocal() as s:
+        cid = s.query(Client).filter_by(name="Test Household").one().id
+    body = c.get(f"/client/{cid}").get_data(as_text=True)
+    assert "Test Household" in body and "W-2 — job 1" in body and "W-2 — job 2" in body
 
 
 def test_f2_upload_ingests_and_shows_matched(app):
@@ -50,19 +66,41 @@ def test_f2_upload_ingests_and_shows_matched(app):
     assert "w2_ana_emp1_2025.pdf" in body            # appears as a matched file in the checklist
 
 
-def test_f3_review_accept_moves_doc_to_matched(app):
+def test_f3_invalid_accept_is_blocked(app):
+    """A misclick can't file an unknown-person file onto someone else's row (suggestion.md #1)."""
     cid = app.config["CID"]
     c = app.test_client()
     _upload(c, cid, "w2_carlos_2025.pdf")            # unknown person → attention queue
     with SessionLocal() as s:
         did = s.query(Document).filter_by(original_filename="w2_carlos_2025.pdf").one().id
-        client = s.get(Client, cid)
-        luis = next(p for p in client.people if p.role is Role.SPOUSE)
+        ana = next(p for p in s.get(Client, cid).people if p.role is Role.TAXPAYER)
         rid = s.query(Requirement).filter_by(
             client_id=cid,
-            natural_key=make_natural_key(luis.id, DocType.W2, 2025, 0)).one().id
-
+            natural_key=make_natural_key(ana.id, DocType.W2, 2025, 0)).one().id
     resp = c.post(f"/documents/{did}/review", data={"action": "accept", "requirement_id": rid})
     assert resp.status_code == 302
     with SessionLocal() as s:
+        assert s.get(Document, did).state.value == "exception"   # blocked, still needs attention
+
+
+def test_f3b_reassign_files_unknown_person_doc(app):
+    """The guided correction: reassign an unknown-person file to a real person → it files."""
+    cid = app.config["CID"]
+    c = app.test_client()
+    _upload(c, cid, "w2_carlos_2025.pdf")
+    with SessionLocal() as s:
+        did = s.query(Document).filter_by(original_filename="w2_carlos_2025.pdf").one().id
+    c.post(f"/documents/{did}/review", data={"action": "reassign", "person_name": "Ana Rivera"})
+    with SessionLocal() as s:
         assert s.get(Document, did).state.value == "matched"
+
+
+def test_f5_add_a_document_we_need(app):
+    cid = app.config["CID"]
+    c = app.test_client()
+    resp = c.post(f"/client/{cid}/requirements",
+                  data={"person_id": "", "doc_type": "F1040", "tax_year": "2024",
+                        "note": "prior-year state return"})
+    assert resp.status_code == 302
+    body = c.get(f"/client/{cid}").get_data(as_text=True)
+    assert "added by you" in body and "prior-year state return" in body
