@@ -92,17 +92,6 @@ templates with synthetic scenario data (`scripts/build_fixtures.py`), plus one r
 (ADP) text-layer W-2 that doubles as a wrong-year + unknown-person case, and a rasterized
 image for the unreadable case. See [`docs/02`](docs/02-data-and-classifier.md).
 
-## Demo narration (for the walkthrough video)
-
-1. Open `/client/1` — the **January** checklist (Luis has 1 job → 1 W-2).
-2. Upload clean W-2s / the 1040 → they **auto-match**. Upload the awkward files
-   (`w2_ana_2023`, `w2_carlos_2025`, `scan_unreadable`, the ADP sample) → they land in
-   **Needs attention** with the reason and the tool's confidence.
-3. **Waive** Luis's gov ID and **add** a requirement — simulating two months of edits.
-4. **Re-derive** with Luis's June job change → **exactly one** new W-2 appears; the waiver and
-   the added item are **still there**. That's the whole point, on screen.
-5. Resolve the queue (accept / reassign / reject); the header counts settle.
-
 ---
 
 ## Decisions & assumptions (recorded per the brief)
